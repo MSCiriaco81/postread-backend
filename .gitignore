@@ -1,0 +1,35 @@
+# ── Compiled output ──────────────────────────────────────────────────────────
+target/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.classpath
+*.project
+.settings/
+
+# ── Maven wrapper cache ───────────────────────────────────────────────────────
+.mvn/wrapper/maven-wrapper.jar
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Environment / secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.properties
+application-prod.yml
+application-prod.properties
+
+# ── Spring Boot devtools restart trigger ─────────────────────────────────────
+.reloadtrigger

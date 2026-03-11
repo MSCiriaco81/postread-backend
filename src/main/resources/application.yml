@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: postread-backend
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/postread}
+      database: ${MONGODB_DATABASE:postread}
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+postread:
+  jwt:
+    secret: ${JWT_SECRET:postread-super-secret-key-change-in-production-minimum-256-bits}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}  # 24h
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+logging:
+  level:
+    com.postread: DEBUG
+    org.springframework.security: INFO

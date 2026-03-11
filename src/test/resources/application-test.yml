@@ -1,0 +1,14 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/postread-test
+
+postread:
+  jwt:
+    secret: test-secret-key-only-for-testing-purposes-minimum-length
+    expiration-ms: 3600000
+
+logging:
+  level:
+    com.postread: WARN
+    org.springframework.security: WARN
