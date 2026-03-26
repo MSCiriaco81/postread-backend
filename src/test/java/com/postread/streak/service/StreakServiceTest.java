@@ -130,6 +130,8 @@ class StreakServiceTest {
     @Test
     @DisplayName("processReadingEntry: deve incrementar currentStreak quando todos completam no dia")
     void processReadingEntry_allComplete_incrementsStreak() {
+        LocalDate today = LocalDate.now();
+
         when(streakRepository.findActiveByParticipant("user-1")).thenReturn(List.of(mockStreak));
         when(streakActivityRepository.findByStreakIdAndUserIdAndDate(any(), any(), any()))
                 .thenReturn(Optional.empty());
@@ -140,6 +142,10 @@ class StreakServiceTest {
                 .thenReturn(Optional.of(StreakActivity.builder().completed(true).build()));
         when(streakActivityRepository.findByStreakIdAndUserIdAndDate(eq("streak-1"), eq("user-2"), any()))
                 .thenReturn(Optional.of(StreakActivity.builder().completed(true).build()));
+        when(streakActivityRepository.findByStreakId("streak-1")).thenReturn(List.of(
+                StreakActivity.builder().streakId("streak-1").userId("user-1").date(today).completed(true).build(),
+                StreakActivity.builder().streakId("streak-1").userId("user-2").date(today).completed(true).build()
+        ));
         when(streakRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         streakService.processReadingEntry("user-1", LocalDate.now(), 30);
