@@ -11,6 +11,8 @@ public interface StreakActivityRepository extends MongoRepository<StreakActivity
 
     Optional<StreakActivity> findByStreakIdAndUserIdAndDate(String streakId, String userId, LocalDate date);
 
+    List<StreakActivity> findByStreakId(String streakId);
+
     List<StreakActivity> findByStreakIdAndDate(String streakId, LocalDate date);
 
     List<StreakActivity> findByStreakIdAndUserIdOrderByDateDesc(String streakId, String userId);

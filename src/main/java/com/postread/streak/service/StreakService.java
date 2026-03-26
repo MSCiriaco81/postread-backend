@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -25,11 +26,14 @@ public class StreakService {
     private final StreakActivityRepository streakActivityRepository;
 
     public Streak createStreak(String creatorId, CreateStreakRequest request) {
-        List<String> participants = new ArrayList<>(request.participantIds());
+        List<String> participants = new ArrayList<>(
+                request.participantIds() != null ? request.participantIds() : List.of()
+        );
         if (!participants.contains(creatorId)) {
             participants.add(0, creatorId);
         }
 
+        // Save streak with currentStreak=0 — only counts after real reading activity
         return streakRepository.save(Streak.builder()
                 .title(request.title())
                 .creatorId(creatorId)
@@ -37,6 +41,9 @@ public class StreakService {
                 .startDate(LocalDate.now())
                 .goalType(request.goalType())
                 .goalValue(request.goalValue())
+                .currentStreak(0)
+                .bestStreak(0)
+                .status(StreakStatus.ACTIVE)
                 .build());
     }
 
@@ -49,13 +56,8 @@ public class StreakService {
                 .orElseThrow(() -> new ResourceNotFoundException("Streak", streakId));
     }
 
-    /**
-     * Called after each reading entry is saved.
-     * Updates all active streaks the user participates in.
-     */
     public void processReadingEntry(String userId, LocalDate date, Integer minutesRead) {
         List<Streak> activeStreaks = streakRepository.findActiveByParticipant(userId);
-
         for (Streak streak : activeStreaks) {
             try {
                 recordActivity(streak, userId, date, minutesRead != null ? minutesRead : 0);
@@ -71,19 +73,22 @@ public class StreakService {
         if (!streak.getParticipantIds().contains(userId)) {
             throw new BusinessException("User is not a participant of this streak");
         }
-        return recordActivity(streak, userId, LocalDate.now(), minutesRead);
+        if (streak.getStatus() != StreakStatus.ACTIVE) {
+            throw new BusinessException("Streak is not active");
+        }
+        StreakActivity activity = recordActivity(streak, userId, LocalDate.now(), minutesRead);
+        recalculateStreak(streak);
+        return activity;
     }
 
     private StreakActivity recordActivity(Streak streak, String userId, LocalDate date, int minutesRead) {
         var existing = streakActivityRepository.findByStreakIdAndUserIdAndDate(streak.getId(), userId, date);
-
         if (existing.isPresent()) {
             StreakActivity activity = existing.get();
             activity.setMinutesRead(activity.getMinutesRead() + minutesRead);
             activity.setCompleted(true);
             return streakActivityRepository.save(activity);
         }
-
         return streakActivityRepository.save(StreakActivity.builder()
                 .streakId(streak.getId())
                 .userId(userId)
@@ -94,9 +99,10 @@ public class StreakService {
     }
 
     private void recalculateStreak(Streak streak) {
-        // For CONSECUTIVE_DAYS: check if all participants read today and yesterday
+        LocalDate today = LocalDate.now();
+
         if (streak.getGoalType() == Streak.GoalType.CONSECUTIVE_DAYS) {
-            LocalDate today = LocalDate.now();
+            // All participants must have completed today for the day to count
             boolean allCompletedToday = streak.getParticipantIds().stream()
                     .allMatch(uid -> streakActivityRepository
                             .findByStreakIdAndUserIdAndDate(streak.getId(), uid, today)
@@ -104,7 +110,8 @@ public class StreakService {
                             .orElse(false));
 
             if (allCompletedToday) {
-                streak.setCurrentStreak(streak.getCurrentStreak() + 1);
+                long completedDays = countCompletedGroupDays(streak);
+                streak.setCurrentStreak((int) completedDays);
                 if (streak.getCurrentStreak() > streak.getBestStreak()) {
                     streak.setBestStreak(streak.getCurrentStreak());
                 }
@@ -113,6 +120,36 @@ public class StreakService {
                 }
                 streakRepository.save(streak);
             }
+
+        } else if (streak.getGoalType() == Streak.GoalType.TOTAL_MINUTES) {
+            int totalMinutes = streakActivityRepository.findByStreakId(streak.getId())
+                    .stream().mapToInt(StreakActivity::getMinutesRead).sum();
+            streak.setCurrentStreak(totalMinutes);
+            if (totalMinutes > streak.getBestStreak()) streak.setBestStreak(totalMinutes);
+            if (totalMinutes >= streak.getGoalValue()) streak.setStatus(StreakStatus.COMPLETED);
+            streakRepository.save(streak);
+
+        } else if (streak.getGoalType() == Streak.GoalType.TOTAL_PAGES) {
+            long total = streakActivityRepository.findByStreakId(streak.getId())
+                    .stream().filter(StreakActivity::isCompleted).count();
+            streak.setCurrentStreak((int) total);
+            if (streak.getCurrentStreak() > streak.getBestStreak()) streak.setBestStreak(streak.getCurrentStreak());
+            if (streak.getCurrentStreak() >= streak.getGoalValue()) streak.setStatus(StreakStatus.COMPLETED);
+            streakRepository.save(streak);
         }
+    }
+
+    private long countCompletedGroupDays(Streak streak) {
+        List<StreakActivity> all = streakActivityRepository.findByStreakId(streak.getId());
+        int participantCount = streak.getParticipantIds().size();
+        return all.stream()
+                .filter(StreakActivity::isCompleted)
+                .collect(Collectors.groupingBy(
+                        StreakActivity::getDate,
+                        Collectors.mapping(StreakActivity::getUserId, Collectors.toSet())
+                ))
+                .entrySet().stream()
+                .filter(e -> e.getValue().size() >= participantCount)
+                .count();
     }
 }
